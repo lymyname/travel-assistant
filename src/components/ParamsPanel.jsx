@@ -1,27 +1,28 @@
-import React from 'react';
+import { memo } from 'react';
 import useDialogStore from '../stores/useDialogStore';
+import { PARAM_LABELS } from '../constants';
 
-const ParamsPanel = () => {
+const ParamsPanel = memo(() => {
   const { collectedParams } = useDialogStore();
-  const paramLabels = {
-    destination: '目的地',
-    days: '天数',
-    travelers: '人数',
-    budget: '预算',
-    departure: '出发地',
-  };
-  const entries = Object.entries(collectedParams).filter(([key, val]) => val && paramLabels[key]);
+  const entries = Object.entries(collectedParams).filter(
+    ([key, val]) => val && PARAM_LABELS[key]
+  );
+
   if (entries.length === 0) return null;
+
   return (
-    <div className="params-panel">
+    <aside className="params-panel" aria-label="已收集参数">
       <h4>已收集参数</h4>
       {entries.map(([key, val]) => (
         <div key={key} className="param-item">
-          <span className="param-dot"></span> {paramLabels[key]}: {val}
+          <span className="param-dot" aria-hidden="true" />
+          <span>{PARAM_LABELS[key]}: {val}</span>
         </div>
       ))}
-    </div>
+    </aside>
   );
-};
+});
+
+ParamsPanel.displayName = 'ParamsPanel';
 
 export default ParamsPanel;

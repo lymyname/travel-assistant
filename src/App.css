@@ -20,6 +20,52 @@
   display: flex;
   align-items: center;
   gap: 12px;
+  position: relative;
+}
+
+.app-title {
+  color: white;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.app-status {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 13px;
+  margin-top: 2px;
+}
+
+.clear-btn {
+  position: absolute;
+  right: 0;
+  background: transparent;
+  border: none;
+  font-size: 18px;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 50%;
+  transition: all 0.2s;
+  opacity: 0.7;
+}
+
+.clear-btn:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.input-wrapper input.focused {
+  outline: none;
+}
+
+.input-wrapper:focus-within {
+  border-color: rgba(102, 126, 234, 0.5);
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.send-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none !important;
 }
 .avatar {
   width: 44px;
@@ -89,12 +135,62 @@
   font-size: 14px;
   max-width: 80%;
   box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+  position: relative;
+}
+
+.message-content {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.message-time {
+  display: block;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.5);
+  margin-top: 6px;
+  text-align: right;
+}
+
+.bubble-user .message-time {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.retry-btn {
+  background: rgba(239, 68, 68, 0.2);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: #fca5a5;
+  padding: 6px 12px;
+  border-radius: 16px;
+  font-size: 12px;
+  cursor: pointer;
+  margin-top: 8px;
+  transition: all 0.2s;
+}
+
+.retry-btn:hover {
+  background: rgba(239, 68, 68, 0.3);
+}
+
+.products-section {
+  margin-top: 12px;
 }
 .quick-options {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 12px;
+  max-height: 100px;
+  overflow-y: auto;
+}
+
+@media (max-width: 680px) {
+  .quick-options {
+    max-height: 80px;
+  }
+
+  .chat-input-area {
+    padding-bottom: 20px;
+  }
 }
 .quick-btn {
   background: rgba(255, 255, 255, 0.08);
