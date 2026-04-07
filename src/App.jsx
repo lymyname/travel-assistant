@@ -6,7 +6,7 @@ import QuickOptions from './components/QuickOptions';
 import ParamsPanel from './components/ParamsPanel';
 import MobileParamsDrawer from './components/MobileParamsDrawer';
 import { ThinkingIndicator } from './components/Skeleton';
-import { DEFAULT_WELCOME_MESSAGE } from './constants';
+import { getWelcomeMessage } from './services/api.js';
 import './App.css';
 
 // Debounced scroll function
@@ -26,10 +26,14 @@ function App() {
     debouncedScroll(messagesEndRef.current);
   }, [messages]);
 
-  // Initialize welcome message
+  // Initialize welcome message - use ref to prevent double initialization in StrictMode
+  const hasInitialized = useRef(false);
+
   useEffect(() => {
-    if (messages.length === 0) {
-      addMessage('assistant', DEFAULT_WELCOME_MESSAGE);
+    if (!hasInitialized.current && messages.length === 0) {
+      hasInitialized.current = true;
+      const welcomeMsg = getWelcomeMessage();
+      addMessage('assistant', welcomeMsg);
     }
   }, []);
 

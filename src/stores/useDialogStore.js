@@ -1,10 +1,9 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { recommendApi } from '../services/api';
+import { recommendApi, getWelcomeMessage } from '../services/api.js';
 import {
   PARAM_PATTERNS,
   REQUIRED_FIELDS,
-  DEFAULT_WELCOME_MESSAGE,
   ASK_MESSAGES,
 } from '../constants';
 
@@ -169,7 +168,7 @@ const useDialogStore = create(
       },
 
       /**
-       * Clear chat history
+       * Clear chat history and reset to initial state with welcome message
        */
       clearChat: () => {
         set({
@@ -178,6 +177,9 @@ const useDialogStore = create(
           errorMessage: null,
           retryCount: 0,
         });
+        // Add welcome message after clearing
+        const welcomeMsg = getWelcomeMessage();
+        get().addMessage('assistant', welcomeMsg);
       },
     }),
     {
