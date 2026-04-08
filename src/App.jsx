@@ -5,6 +5,7 @@ import ChatMessage from './components/ChatMessage';
 import QuickOptions from './components/QuickOptions';
 import ParamsPanel from './components/ParamsPanel';
 import MobileParamsDrawer from './components/MobileParamsDrawer';
+import AIAssistant from './components/AIAssistant';
 import { ThinkingIndicator } from './components/Skeleton';
 import { getWelcomeMessage } from './services/api.js';
 import './App.css';
@@ -148,6 +149,8 @@ function App() {
         </form>
         <QuickOptions />
       </footer>
+
+      <AIAssistant />
     </main>
   );
 }
