@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import ReactMarkdown from 'react-markdown';
 import { chatWithAI, getAIProviderName } from '../services/aiService.js';
-import { ThinkingIndicator } from './Skeleton.jsx';
 import './AIAssistant.css';
 
 // Default button position (right: 20px, bottom: 160px)
@@ -38,9 +38,20 @@ const AIAssistant = () => {
 
   const providerName = getAIProviderName();
 
+  const [streamingContent, setStreamingContent] = useState('');
+  const [isStreaming, setIsStreaming] = useState(false);
+  const abortControllerRef = useRef(null);
+
   // Clear old localStorage on mount
   useEffect(() => {
     localStorage.removeItem('ai-assistant-position');
+  }, []);
+
+  // Cleanup abort controller on unmount
+  useEffect(() => {
+    return () => {
+      abortControllerRef.current?.abort();
+    };
   }, []);
 
   // Handle window resize - keep button in viewport
@@ -162,27 +173,45 @@ const AIAssistant = () => {
 
   const handleSend = useCallback(async () => {
     const trimmed = inputValue.trim();
-    if (!trimmed || isLoading) return;
+    if (!trimmed || isLoading || isStreaming) return;
 
     const userMessage = { role: 'user', content: trimmed, timestamp: new Date().toISOString() };
     setMessages(prev => [...prev, userMessage]);
     setInputValue('');
-    setIsLoading(true);
+    setIsStreaming(true);
+    setStreamingContent('');
+
+    // Create abort controller for cancelling request
+    abortControllerRef.current = new AbortController();
 
     try {
-      const aiResponse = await chatWithAI([...messages, userMessage]);
-      setMessages(prev => [...prev, { ...aiResponse, timestamp: new Date().toISOString() }]);
-    } catch {
+      const aiResponse = await chatWithAI([...messages, userMessage], {
+        onChunk: (chunk, fullContent) => {
+          setStreamingContent(fullContent);
+        },
+        signal: abortControllerRef.current.signal,
+      });
+
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: '抱歉，服务暂时不可用，请稍后重试。',
-        isError: true,
-        timestamp: new Date().toISOString(),
+        content: aiResponse.content,
+        timestamp: new Date().toISOString()
       }]);
+    } catch (error) {
+      if (error.name !== 'AbortError') {
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: streamingContent || '抱歉，服务暂时不可用，请稍后重试。',
+          isError: true,
+          timestamp: new Date().toISOString(),
+        }]);
+      }
     } finally {
-      setIsLoading(false);
+      setIsStreaming(false);
+      setStreamingContent('');
+      abortControllerRef.current = null;
     }
-  }, [inputValue, isLoading, messages]);
+  }, [inputValue, isLoading, isStreaming, messages, streamingContent]);
 
   const handleKeyDown = useCallback((e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -211,31 +240,50 @@ const AIAssistant = () => {
     { icon: '👨‍👩‍👧‍👦', text: '亲子游/蜜月游推荐' },
   ];
 
-  const handleSuggestionClick = useCallback((text) => {
+  const handleSuggestionClick = useCallback(async (text) => {
+    if (isLoading || isStreaming) return;
+
     const userMessage = { role: 'user', content: text, timestamp: new Date().toISOString() };
     setMessages(prev => [...prev, userMessage]);
-    setIsLoading(true);
+    setIsStreaming(true);
+    setStreamingContent('');
 
-    chatWithAI([...messages, userMessage])
-      .then(aiResponse => {
-        setMessages(prev => [...prev, { ...aiResponse, timestamp: new Date().toISOString() }]);
-      })
-      .catch(() => {
+    abortControllerRef.current = new AbortController();
+
+    try {
+      const aiResponse = await chatWithAI([...messages, userMessage], {
+        onChunk: (chunk, fullContent) => {
+          setStreamingContent(fullContent);
+        },
+        signal: abortControllerRef.current.signal,
+      });
+
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: aiResponse.content,
+        timestamp: new Date().toISOString()
+      }]);
+    } catch (error) {
+      if (error.name !== 'AbortError') {
         setMessages(prev => [...prev, {
           role: 'assistant',
-          content: '抱歉，服务暂时不可用，请稍后重试。',
+          content: streamingContent || '抱歉，服务暂时不可用，请稍后重试。',
           isError: true,
           timestamp: new Date().toISOString(),
         }]);
-      })
-      .finally(() => setIsLoading(false));
-  }, [messages]);
+      }
+    } finally {
+      setIsStreaming(false);
+      setStreamingContent('');
+      abortControllerRef.current = null;
+    }
+  }, [isLoading, isStreaming, messages, streamingContent]);
 
   return (
     <>
       {/* Floating Button */}
       <button
-        className={`ai-assistant-float-btn ${isDragging ? 'dragging' : ''}`}
+        className={`ai-assistant-float-btn ${isDragging ? 'dragging' : ''} ${(isLoading || isStreaming) ? 'thinking' : ''}`}
         onClick={handleClick}
         onMouseDown={handleMouseDown}
         onTouchStart={handleTouchStart}
@@ -247,8 +295,14 @@ const AIAssistant = () => {
         aria-label="打开AI助手"
         aria-expanded={isOpen}
       >
-        <span className="ai-icon">🤖</span>
-        <span className="ai-label">AI问问</span>
+        <span className="ai-icon">{(isLoading || isStreaming) ? '🧠' : '🤖'}</span>
+        <span className="ai-label">{(isLoading || isStreaming) ? '思考中...' : 'AI问问'}</span>
+        {(isLoading || isStreaming) && (
+          <>
+            <span className="btn-sparkle s1">✨</span>
+            <span className="btn-sparkle s2">💫</span>
+          </>
+        )}
       </button>
 
       {/* Overlay */}
@@ -301,13 +355,54 @@ const AIAssistant = () => {
             <div key={index} className={`ai-message ${msg.role} ${msg.isError ? 'error' : ''}`}>
               <div className="ai-message-avatar">{msg.role === 'assistant' ? '🤖' : '👤'}</div>
               <div className="ai-message-content">
-                <p>{msg.content}</p>
+                {msg.role === 'assistant' ? (
+                  <div className="markdown-body">
+                    <ReactMarkdown>{msg.content}</ReactMarkdown>
+                  </div>
+                ) : (
+                  <p>{msg.content}</p>
+                )}
                 <time className="ai-message-time">{formatTime(msg.timestamp)}</time>
               </div>
             </div>
           ))}
 
-          {isLoading && <ThinkingIndicator />}
+          {/* Streaming message */}
+          {isStreaming && (
+            <div className="ai-message assistant streaming">
+              <div className="ai-message-avatar">🤖</div>
+              <div className="ai-message-content">
+                <div className="markdown-body streaming-text">
+                  <ReactMarkdown>{streamingContent}</ReactMarkdown>
+                  <span className="typing-cursor">▋</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {(isLoading && !isStreaming) && (
+            <div className="ai-message assistant loading">
+              <div className="ai-message-avatar ai-thinking">
+                <span className="brain">🧠</span>
+                <span className="sparkle s1">✨</span>
+                <span className="sparkle s2">💫</span>
+                <span className="sparkle s3">⭐</span>
+              </div>
+              <div className="ai-message-content">
+                <div className="ai-thinking-bubble">
+                  <span className="thinking-text">正在思考</span>
+                  <span className="thinking-dots">
+                    <span>.</span><span>.</span><span>.</span>
+                  </span>
+                </div>
+                <div className="travel-icons">
+                  <span className="t-icon">✈️</span>
+                  <span className="t-icon">🗺️</span>
+                  <span className="t-icon">🏝️</span>
+                </div>
+              </div>
+            </div>
+          )}
           <div ref={messagesEndRef} />
         </div>
 
@@ -316,17 +411,27 @@ const AIAssistant = () => {
             <input
               ref={inputRef}
               type="text"
-              placeholder="输入你的问题..."
+              placeholder={isStreaming ? "AI正在回答..." : "输入你的问题..."}
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               onKeyDown={handleKeyDown}
-              disabled={isLoading}
+              disabled={isLoading || isStreaming}
               maxLength={500}
               aria-label="输入问题"
             />
-            <button className="ai-send-btn" onClick={handleSend} disabled={isLoading || !inputValue.trim()} aria-label="发送">
-              ➤
-            </button>
+            {isStreaming ? (
+              <button
+                className="ai-stop-btn"
+                onClick={() => abortControllerRef.current?.abort()}
+                aria-label="停止生成"
+              >
+                ⏹
+              </button>
+            ) : (
+              <button className="ai-send-btn" onClick={handleSend} disabled={isLoading || !inputValue.trim()} aria-label="发送">
+                ➤
+              </button>
+            )}
           </div>
           <p className="ai-input-hint">按 Enter 发送，AI回答仅供参考</p>
         </footer>
