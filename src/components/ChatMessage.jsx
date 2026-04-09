@@ -1,5 +1,6 @@
 import { memo } from 'react';
 import PropTypes from 'prop-types';
+import ReactMarkdown from 'react-markdown';
 import ProductCard from './ProductCard';
 
 /**
@@ -23,6 +24,7 @@ const formatTime = (timestamp) => {
  * @property {string} content
  * @property {string} [timestamp]
  * @property {Array} [products]
+ * @property {Array} [images]
  * @property {boolean} [isError]
  * @property {function} [onRetry]
  */
@@ -40,7 +42,42 @@ const ChatMessage = memo(({ message }) => {
     >
       {!isUser && <div className="ai-icon" aria-hidden="true">🤖</div>}
       <div className={`bubble-${isUser ? 'user' : 'ai'}`}>
-        <p className="message-content">{message.content}</p>
+        {message.images && message.images.length > 0 && (
+          <div className="message-images">
+            {message.images.map((img, index) => (
+              <img
+                key={index}
+                src={img}
+                alt={`图片 ${index + 1}`}
+                className="message-image"
+                loading="lazy"
+              />
+            ))}
+          </div>
+        )}
+
+        {isUser ? (
+          <p className="message-content">{message.content}</p>
+        ) : (
+          <div className={`message-content markdown-body ${message.isStreaming ? 'streaming' : ''}`}>
+            {message.isStreaming && !message.content ? (
+              // Show loading animation when streaming but no content yet
+              <div className="streaming-loading">
+                <span className="loading-bar" />
+                <span className="loading-bar" />
+                <span className="loading-bar" />
+                <span className="loading-bar" />
+                <span className="loading-bar" />
+              </div>
+            ) : (
+              <>
+                <ReactMarkdown>{message.content}</ReactMarkdown>
+                {message.isStreaming && <span className="typing-cursor">▋</span>}
+              </>
+            )}
+          </div>
+        )}
+
         {message.isError && message.onRetry && (
           <button
             className="retry-btn"
@@ -77,7 +114,9 @@ ChatMessage.propTypes = {
     content: PropTypes.string.isRequired,
     timestamp: PropTypes.string,
     products: PropTypes.array,
+    images: PropTypes.array,
     isError: PropTypes.bool,
+    isStreaming: PropTypes.bool,
     onRetry: PropTypes.func,
   }).isRequired,
 };

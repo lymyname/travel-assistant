@@ -81,70 +81,73 @@ const postOpenAICompatibleChat = async (apiUrl, headers, messages, model) => {
 };
 
 /**
- * Mock AI responses for development
+ * Mock AI responses for development with streaming support
  */
-const getMockAIResponse = async (messages) => {
-  // Simulate network delay
-  await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 1000));
-
+const getMockAIResponse = async (messages, options = {}) => {
+  const { onChunk, signal } = options;
   const lastMessage = messages[messages.length - 1]?.content || '';
   const lowerMsg = lastMessage.toLowerCase();
 
-  // Simple keyword-based responses
+  // Get response content based on keywords
+  let content = '';
   if (lowerMsg.includes('签证') || lowerMsg.includes('护照')) {
-    return {
-      role: 'assistant',
-      content: '🛂 签证信息：\n\n不同目的地签证要求不同：\n• **免签/落地签**：泰国、新加坡、马尔代夫等\n• **电子签**：土耳其、印度、澳大利亚等\n• **纸质签证**：美国、加拿大、申根国家等\n\n建议提前1-2个月准备签证材料，具体可查询各国领事馆官网。需要我详细介绍哪个国家？',
-    };
+    content = '## 🛂 签证信息\n\n不同目的地签证要求不同：\n\n### 免签/落地签\n- **泰国** - 永久免签\n- **新加坡** - 互免签证\n- **马尔代夫** - 30天落地签\n\n### 电子签\n- 土耳其、印度、澳大利亚\n\n### 纸质签证\n- 美国、加拿大、申根国家\n\n> 💡 **建议**：提前1-2个月准备签证材料\n\n需要我详细介绍哪个国家？';
+  } else if (lowerMsg.includes('天气') || lowerMsg.includes('气候') || lowerMsg.includes('温度')) {
+    content = '## 🌤️ 最佳旅行季节\n\n### 春季 (3-5月)\n- 日本赏樱 🌸\n- 荷兰郁金香 🌷\n\n### 夏季 (6-8月)\n- 北欧避暑\n- 北海道花海\n- 海岛度假 🏝️\n\n### 秋季 (9-11月)\n- 新疆喀纳斯 🍂\n- 加拿大枫叶\n- 韩国首尔\n\n### 冬季 (12-2月)\n- 东北滑雪 ⛷️\n- 海南避寒\n- 北海道温泉 ♨️\n\n你想了解哪个目的地的具体天气情况？';
+  } else if (lowerMsg.includes('美食') || lowerMsg.includes('吃') || lowerMsg.includes('餐厅')) {
+    content = '## 🍜 美食推荐\n\n### 成都\n- 火锅、串串香\n- 担担面、龙抄手\n\n### 西安\n- 肉夹馍、凉皮\n- 羊肉泡馍、biangbiang面\n\n### 广州\n- 早茶、烧鹅\n- 肠粉、双皮奶\n\n### 北京\n- 烤鸭、炸酱面\n- 豆汁、卤煮\n\n> 🎯 想知道具体餐厅推荐？告诉我你想去哪座城市！';
+  } else if (lowerMsg.includes('预算') || lowerMsg.includes('多少钱') || lowerMsg.includes('费用')) {
+    content = '## 💰 旅行预算参考（人均/周）\n\n### 经济型 ¥2000-3000\n- 青旅或民宿住宿\n- 公共交通出行\n- 当地小吃为主\n\n### 舒适型 ¥4000-6000\n- 精品酒店或度假村\n- 部分包车游览\n- 特色餐厅体验\n\n### 豪华型 ¥8000+\n- 五星酒店或别墅\n- 全程专车服务\n- 米其林餐厅\n\n---\n\n> 📱 **提示**：想要获取具体行程报价，使用主界面的旅行规划功能！';
+  } else if (lowerMsg.includes('亲子') || lowerMsg.includes('小孩') || lowerMsg.includes('孩子')) {
+    content = '## 👨‍👩‍👧‍👦 亲子游推荐\n\n### 主题乐园\n- **上海**：迪士尼、海昌海洋公园\n- **广州/珠海**：长隆野生动物世界、长隆海洋王国\n- **北京**：环球影城\n\n### 自然探索\n- **三亚**：亚特兰蒂斯、蜈支洲岛\n- **云南**：西双版纳野象谷\n\n### 文化体验\n- **北京**：故宫、科技馆\n- **大理**：游学体验\n\n> ✨ **小贴士**：行程不要太满，选择有儿童设施的酒店，预留休息时间';
+  } else if (lowerMsg.includes('honeymoon') || lowerMsg.includes('蜜月') || lowerMsg.includes('情侣')) {
+    content = '## 💕 蜜月/情侣游推荐\n\n### 海岛浪漫\n- 马尔代夫、巴厘岛\n- 普吉岛、斐济 🏝️\n\n### 欧洲风情\n- 巴黎、威尼斯\n- 圣托里尼、瑞士\n\n### 国内精选\n- 丽江、大理、厦门\n- 三亚、桂林\n\n### 小众秘境\n- 泸沽湖、稻城亚丁\n- 婺源、乌镇\n\n---\n\n## 💡 蜜月小贴士\n\n1. 至少提前 **3个月** 规划\n2. 选择私密性好的酒店\n3. 预留1-2天自由活动时间\n\n需要 romantic 的行程安排吗？';
+  } else {
+    const genericResponses = [
+      '这是个好问题！🤔 旅行中最重要的是根据自己的兴趣和预算来选择目的地。你是更喜欢自然风光还是人文古迹呢？',
+      '很高兴为你解答！✨ 如果你有更具体的需求，比如出行人数、天数、预算范围，我可以给你更精准的建议。',
+      '了解了！🌟 旅行规划确实需要考虑很多因素。我的建议是先确定大方向（想去看什么类型的风景），然后再细化行程。',
+      '不错的问题！💡 这方面我有很多经验可以分享。你可以继续追问，或者告诉我你的旅行计划，我来帮你完善！',
+    ];
+    content = genericResponses[Math.floor(Math.random() * genericResponses.length)];
   }
 
-  if (lowerMsg.includes('天气') || lowerMsg.includes('气候') || lowerMsg.includes('温度')) {
-    return {
-      role: 'assistant',
-      content: '🌤️ 关于旅行天气：\n\n• **春季(3-5月)**：适合日本赏樱、荷兰郁金香\n• **夏季(6-8月)**：北欧、北海道避暑，海岛度假\n• **秋季(9-11月)**：新疆喀纳斯、加拿大枫叶、韩国首尔\n• **冬季(12-2月)**：东北滑雪、海南避寒、北海道温泉\n\n你想了解哪个目的地的具体天气情况？',
-    };
+  // If streaming is requested, stream the content
+  if (typeof onChunk === 'function') {
+    let currentContent = '';
+    const chars = content.split('');
+
+    for (let i = 0; i < chars.length; i++) {
+      // Check for abort
+      if (signal?.aborted) {
+        throw new Error('AbortError');
+      }
+
+      currentContent += chars[i];
+      onChunk(chars[i], currentContent);
+
+      // Simulate typing speed - vary by character type
+      const delay = chars[i] === '\n' ? 50 : chars[i] === ' ' ? 30 : 20 + Math.random() * 30;
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+
+    return { role: 'assistant', content: currentContent };
   }
 
-  if (lowerMsg.includes('美食') || lowerMsg.includes('吃') || lowerMsg.includes('餐厅')) {
-    return {
-      role: 'assistant',
-      content: '🍜 美食推荐：\n\n• **成都**：火锅、串串香、担担面、龙抄手\n• **西安**：肉夹馍、凉皮、羊肉泡馍、biangbiang面\n• **广州**：早茶、烧鹅、肠粉、双皮奶\n• **北京**：烤鸭、炸酱面、豆汁、卤煮\n\n想要更详细的美食攻略吗？告诉我你想去哪座城市！',
-    };
-  }
+  // Non-streaming fallback
+  await new Promise((resolve, reject) => {
+    const delay = 1000 + Math.random() * 1000;
+    const timeoutId = setTimeout(resolve, delay);
 
-  if (lowerMsg.includes('预算') || lowerMsg.includes('多少钱') || lowerMsg.includes('费用')) {
-    return {
-      role: 'assistant',
-      content: '💰 旅行预算参考（人均）：\n\n• **经济型**：¥2000-3000/人/周\n  - 选择青旅或民宿\n  - 公共交通出行\n  - 当地小吃为主\n\n• **舒适型**：¥4000-6000/人/周\n  - 精品酒店或度假村\n  - 部分包车游览\n  - 特色餐厅体验\n\n• **豪华型**：¥8000+/人/周\n  - 五星酒店或别墅\n  - 全程专车服务\n  - 米其林餐厅\n\n想要获取具体行程报价，可以使用主界面的旅行规划功能哦！',
-    };
-  }
+    if (signal) {
+      signal.addEventListener('abort', () => {
+        clearTimeout(timeoutId);
+        reject(new Error('AbortError'));
+      });
+    }
+  });
 
-  if (lowerMsg.includes('亲子') || lowerMsg.includes('小孩') || lowerMsg.includes('孩子')) {
-    return {
-      role: 'assistant',
-      content: '👨‍👩‍👧‍👦 亲子游推荐：\n\n• **上海**：迪士尼、海昌海洋公园、自然博物馆\n• **广州/珠海**：长隆野生动物世界、长隆海洋王国\n• **北京**：故宫、科技馆、环球影城\n• **三亚**：亚特兰蒂斯、蜈支洲岛、亲子酒店\n• **云南**：大理游学、丽江古镇、西双版纳野象谷\n\n亲子游建议：行程不要太满，选择有儿童设施的酒店，预留休息时间。需要具体行程规划吗？',
-    };
-  }
-
-  if (lowerMsg.includes('honeymoon') || lowerMsg.includes('蜜月') || lowerMsg.includes('情侣')) {
-    return {
-      role: 'assistant',
-      content: '💕 蜜月/情侣游推荐：\n\n• **海岛浪漫**：马尔代夫、巴厘岛、普吉岛、斐济\n• **欧洲风情**：巴黎、威尼斯、圣托里尼、瑞士\n• **国内精选**：丽江、大理、厦门、三亚、桂林\n• **小众秘境**：泸沽湖、稻城亚丁、婺源、乌镇\n\n蜜月小贴士：\n✓ 至少提前3个月规划\n✓ 选择私密性好的酒店\n✓ 预留1-2天自由活动\n\n想要 romantic 的行程安排吗？',
-    };
-  }
-
-  // Generic response
-  const genericResponses = [
-    '这是个好问题！🤔 旅行中最重要的是根据自己的兴趣和预算来选择目的地。你是更喜欢自然风光还是人文古迹呢？',
-    '很高兴为你解答！✨ 如果你有更具体的需求，比如出行人数、天数、预算范围，我可以给你更精准的建议。',
-    '了解了！🌟 旅行规划确实需要考虑很多因素。我的建议是先确定大方向（想去看什么类型的风景），然后再细化行程。',
-    '不错的问题！💡 这方面我有很多经验可以分享。你可以继续追问，或者告诉我你的旅行计划，我来帮你完善！',
-  ];
-
-  return {
-    role: 'assistant',
-    content: genericResponses[Math.floor(Math.random() * genericResponses.length)],
-  };
+  return { role: 'assistant', content };
 };
 
 /**
@@ -392,7 +395,7 @@ const callCustomAPI = async (messages) => {
 /**
  * Main AI chat function
  * @param {Array} messages - Array of message objects {role, content}
- * @param {Object} options - Optional configuration (e.g., onChunk for streaming)
+ * @param {Object} options - Optional configuration (e.g., onChunk for streaming, signal for abort)
  * @returns {Promise<{role: string, content: string}>}
  */
 export const chatWithAI = async (messages, options = {}) => {
@@ -412,9 +415,13 @@ export const chatWithAI = async (messages, options = {}) => {
         return await callCustomAPI(messages);
       case AI_PROVIDERS.MOCK:
       default:
-        return await getMockAIResponse(messages);
+        return await getMockAIResponse(messages, options);
     }
   } catch (error) {
+    // Re-throw AbortError so caller can handle it
+    if (error.message === 'AbortError' || error.name === 'AbortError') {
+      throw error;
+    }
     console.error('AI Chat Error:', error);
     return {
       role: 'assistant',

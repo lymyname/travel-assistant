@@ -19,13 +19,18 @@ export const SkeletonMessage = () => (
   </div>
 );
 
-export const ThinkingIndicator = () => (
+export const ThinkingIndicator = ({ isAI = false }) => (
   <div className="message-ai" role="status" aria-live="polite">
-    <div className="ai-icon">🤖</div>
-    <div className="bubble-ai thinking-bubble" aria-label="AI正在思考">
-      <span className="thinking-dot" />
-      <span className="thinking-dot" />
-      <span className="thinking-dot" />
+    <div className="ai-icon thinking-pulse">{isAI ? '🧠' : '🤖'}</div>
+    <div className="bubble-ai thinking-bubble-enhanced" aria-label={isAI ? 'AI正在思考' : '正在搜索产品'}>
+      <div className="wave-container">
+        <span className="wave-bar" />
+        <span className="wave-bar" />
+        <span className="wave-bar" />
+        <span className="wave-bar" />
+        <span className="wave-bar" />
+      </div>
+      <span className="thinking-text">{isAI ? '思考中' : '搜索中'}</span>
     </div>
   </div>
 );

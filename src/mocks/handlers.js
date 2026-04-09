@@ -95,7 +95,7 @@ const generateProducts = (params) => {
       description: `${template.description}，入住${budgetConfig.hotelLevel}`,
       price,
       imageUrl: destInfo.images[index % destInfo.images.length],
-      detailUrl: `/product/${encodeURIComponent(destInfo.name)}/${index + 1}`,
+      detailUrl: `https://vacations.ctrip.com/travel/search?q=${encodeURIComponent(destInfo.name + ' ' + template.type)}`,
       tags: destInfo.tags,
       duration: days || 5,
       destination: destInfo.name,

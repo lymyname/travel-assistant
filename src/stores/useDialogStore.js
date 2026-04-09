@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { recommendApi, getWelcomeMessage } from '../services/api.js';
+import { chatWithAI } from '../services/aiService.js';
 import {
   PARAM_PATTERNS,
   REQUIRED_FIELDS,
@@ -18,6 +19,8 @@ const useDialogStore = create(
       collectedParams: { destination: '', days: null, travelers: null, budget: '', departure: '' },
       requiredFields: REQUIRED_FIELDS,
       isFetching: false,
+      isAIResponding: false,
+      abortController: null,
       errorMessage: null,
       retryCount: 0,
 
@@ -31,6 +34,7 @@ const useDialogStore = create(
           content,
           timestamp: new Date().toISOString(),
           products: products || undefined,
+          images: options.images || undefined,
           isError: options.isError || false,
           onRetry: options.onRetry || null,
         };
@@ -151,19 +155,160 @@ const useDialogStore = create(
       },
 
       /**
+       * Get AI response for general travel questions (with streaming)
+       */
+      askAI: async () => {
+        if (get().isAIResponding) return;
+
+        // Create abort controller for this request
+        const abortController = new AbortController();
+        set({ isAIResponding: true, abortController });
+
+        const { messages } = get();
+
+        // Build conversation history for AI
+        const history = messages
+          .filter(m => m.role === 'user' || m.role === 'assistant')
+          .map(m => ({
+            role: m.role,
+            content: m.content,
+          }));
+
+        // Create a placeholder message for streaming
+        const streamingMessageId = Date.now() + Math.random();
+        set((state) => ({
+          messages: [...state.messages, {
+            id: streamingMessageId,
+            role: 'assistant',
+            content: '',
+            timestamp: new Date().toISOString(),
+            isStreaming: true,
+          }],
+        }));
+
+        try {
+          let fullContent = '';
+
+          const aiResponse = await chatWithAI(history, {
+            signal: abortController.signal,
+            onChunk: (chunk, full) => {
+              fullContent = full;
+              // Update the streaming message content
+              set((state) => ({
+                messages: state.messages.map(m =>
+                  m.id === streamingMessageId
+                    ? { ...m, content: fullContent }
+                    : m
+                ),
+              }));
+            },
+          });
+
+          // Check if request was aborted
+          if (abortController.signal.aborted) {
+            // Remove the streaming message if aborted
+            set((state) => ({
+              messages: state.messages.filter(m => m.id !== streamingMessageId),
+            }));
+            return;
+          }
+
+          // Finalize the message - remove streaming flag
+          set((state) => ({
+            messages: state.messages.map(m =>
+              m.id === streamingMessageId
+                ? { ...m, content: aiResponse.content || fullContent, isStreaming: false }
+                : m
+            ),
+            isAIResponding: false,
+            abortController: null,
+          }));
+        } catch (error) {
+          // Check if request was aborted
+          if (error.name === 'AbortError' || abortController.signal.aborted) {
+            console.log('AI response aborted');
+            // Remove the streaming message
+            set((state) => ({
+              messages: state.messages.filter(m => m.id !== streamingMessageId),
+              isAIResponding: false,
+              abortController: null,
+            }));
+            return;
+          }
+
+          console.error('AI Chat Error:', error);
+          // Update with error message
+          set((state) => ({
+            messages: state.messages.map(m =>
+              m.id === streamingMessageId
+                ? { ...m, content: '抱歉，AI服务暂时不可用，请稍后重试。', isStreaming: false, isError: true }
+                : m
+            ),
+            isAIResponding: false,
+            abortController: null,
+          }));
+        }
+      },
+
+      /**
+       * Update streaming content (for external use if needed)
+       */
+      updateStreamingContent: (messageId, content) => {
+        set((state) => ({
+          messages: state.messages.map(m =>
+            m.id === messageId && m.isStreaming
+              ? { ...m, content }
+              : m
+          ),
+        }));
+      },
+
+      /**
+       * Stop AI response generation
+       */
+      stopGenerating: () => {
+        const { abortController, isAIResponding } = get();
+        if (abortController && isAIResponding) {
+          abortController.abort();
+          set({ isAIResponding: false, abortController: null });
+        }
+      },
+
+      /**
        * Send a user message
        */
-      sendMessage: (rawText) => {
+      sendMessage: (rawText, options = {}) => {
         const text = rawText.trim();
-        if (!text) return;
+        if (!text && !options.images) return;
 
-        get().addMessage('user', text);
+        // Add user message (with images if provided)
+        get().addMessage('user', text || '[图片]', null, { images: options.images });
+
+        // Skip AI processing if explicitly told to (when we just want to add the message)
+        if (options.skipAI) return;
+
         const parsed = get().parseUserInput(text);
 
-        if (Object.keys(parsed).length) {
+        // Check if this looks like a travel planning request
+        // Must have destination AND at least one other param, or match specific pattern
+        const hasExplicitPlanningIntent = Object.keys(parsed).length >= 2 ||
+          /\d+天/.test(text) || /\d+人/.test(text) || /预算|价格|多少钱/.test(text);
+
+        // Check if input contains question words - should go to AI
+        const hasQuestionWords = /[吗|呢|？|什么|怎么|如何|为什么|哪|多少]|\?/.test(text);
+
+        if (Object.keys(parsed).length && hasExplicitPlanningIntent && !hasQuestionWords) {
+          // User provided planning parameters, update and continue flow
           get().updateParams(parsed);
+        } else if (hasQuestionWords || !Object.keys(parsed).length) {
+          // No clear planning intent - use AI to respond
+          get().askAI();
+        } else if (get().isAllRequiredCollected()) {
+          // All parameters collected, search products
+          get().searchProducts();
         } else {
-          get().checkAndTriggerSearch();
+          // Fallback to AI
+          get().askAI();
         }
       },
 
